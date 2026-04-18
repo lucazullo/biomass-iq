@@ -8,11 +8,23 @@ db_url = settings.database_url
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-# Explicit connect_timeout prevents indefinite hangs when the DB isn't reachable
+# SSL behavior:
+# - Railway internal network (.railway.internal) — no SSL needed
+# - Railway public TCP proxy (.proxy.rlwy.net, .rlwy.net) — SSL required, but the
+#   proxy may not speak SSL at all ports; prefer sslmode=require, fall back to disable
+# Let the URL's own sslmode win if it's already set.
+connect_args: dict = {"connect_timeout": 10}
+if db_url.startswith("postgresql") and "sslmode=" not in db_url:
+    if ".railway.internal" in db_url:
+        connect_args["sslmode"] = "disable"
+    else:
+        # For anything else (public proxy, external DB), require SSL
+        connect_args["sslmode"] = "require"
+
 engine = create_engine(
     db_url,
     pool_pre_ping=True,
-    connect_args={"connect_timeout": 5} if db_url.startswith("postgresql") else {},
+    connect_args=connect_args,
 )
 SessionLocal = sessionmaker(bind=engine)
 
