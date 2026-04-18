@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: biomass-iq-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: biomass-iq-db
+          property: connectionString
+      - key: BIOMASSIQ_CORS_ORIGINS
+        value: "*"
+      - key: PORT
+        value: "8080"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+databases:
+  - name: biomass-iq-db
+    plan: free
+    databaseName: biomassiq
+    user: biomassiq
+    region: oregon
