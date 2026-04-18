@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
  * user to pick two colors.
  */
 
-export type Basis = "ar" | "dry" | "daf" | "ash";
+export type Basis = "ar" | "ad" | "dry" | "daf" | "ash";
 
 export interface BasisColor {
   fill: string;
@@ -21,6 +21,7 @@ export interface BasisColor {
 /** Kept around for legend/stat-card rendering outside the range chart. */
 export const BASIS_DISPLAY_NAMES: Record<Basis, string> = {
   ar: "As-received",
+  ad: "Air-dried",
   dry: "Dry",
   daf: "Dry ash-free",
   ash: "Ash",

@@ -13,7 +13,11 @@ function getSourceUrl(sourceDataset: string, sourceRecordId: string): string | n
   if (sourceDataset === "phylis") {
     return `https://phyllis.nl/Biomass/View/${sourceRecordId}`;
   }
-  // INL/CSIRO URLs would be added here when integrated
+  if (sourceDataset === "csiro") {
+    // CSIRO's DAP doesn't expose per-sample direct links; point to the
+    // collection landing page so the citation is at least traceable.
+    return `https://doi.org/10.25919/3yhq-8a44`;
+  }
   return null;
 }
 

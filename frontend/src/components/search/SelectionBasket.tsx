@@ -35,6 +35,14 @@ export function SelectionBasket({ basket, onRemove, onClear }: SelectionBasketPr
               >
                 <span className="truncate max-w-[200px]">{s.preferred_name}</span>
                 <span className="text-[10px] text-teal-600 shrink-0">{s.observation_count}</span>
+                {s.source_count > 1 && (
+                  <span
+                    className="text-[9px] font-semibold rounded px-1 bg-teal-600 text-white shrink-0"
+                    title={`${s.source_count} data sources`}
+                  >
+                    {s.source_count}×
+                  </span>
+                )}
                 <button
                   onClick={() => onRemove(s.id)}
                   className="rounded-full bg-teal-200 w-4 h-4 flex items-center justify-center text-teal-700 hover:bg-teal-300 shrink-0"

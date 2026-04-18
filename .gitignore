@@ -52,3 +52,13 @@ yarn-error.log*
 # Scraped HTML backup (large, regenerable) — keep parsed JSON for deployment
 backend/app/adapters/phylis/raw_data/samples/
 
+# CSIRO sample photos — only the CSV is used at runtime. Keep the metadata
+# folder (licence, dublin-core, sha256sum) but skip the ~25 MB of JPG/GIFs.
+backend/app/adapters/csiro/raw_data/**/data/*.jpg
+backend/app/adapters/csiro/raw_data/**/data/*.jpeg
+backend/app/adapters/csiro/raw_data/**/data/*.JPG
+backend/app/adapters/csiro/raw_data/**/data/*.gif
+
+# Claude Code local workspace launch config
+.claude/
+

@@ -45,6 +45,18 @@ export async function getSubstance(id: string): Promise<SubstanceDetail> {
   return fetchApi(`/api/search/substances/${id}`);
 }
 
+/** Refresh observation/source counts for a list of substance ids (used by
+ * the basket hook to rehydrate stale localStorage entries). */
+export async function bulkSubstanceSummary(
+  ids: string[],
+): Promise<Array<import("./types").SubstanceSummary>> {
+  const phylis = ids.filter((id) => !id.startsWith("user:"));
+  if (phylis.length === 0) return [];
+  return fetchApi(
+    `/api/search/substances/summary${buildQueryString({ ids: phylis.join(",") })}`,
+  );
+}
+
 // --- Observations ---
 
 export async function getObservations(
@@ -106,6 +118,8 @@ export interface SourceStatusOut {
   upstream_record_count: number | null;
   needs_update: boolean;
   last_check_error: string | null;
+  /** "count" = record count from last scrape; "version" = DAP version number. */
+  baseline_kind: "count" | "version";
 }
 
 export async function listSources(): Promise<SourceStatusOut[]> {

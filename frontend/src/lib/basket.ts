@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { bulkSubstanceSummary } from "./api";
 import type { SubstanceSummary } from "./types";
 
 const STORAGE_KEY = "biomassiq.basket.v1";
@@ -40,8 +41,42 @@ export function useBasket() {
   const hydrated = useRef(false);
 
   useEffect(() => {
-    setBasketState(readFromStorage());
+    const stored = readFromStorage();
+    setBasketState(stored);
     hydrated.current = true;
+
+    // Fire a background refresh so observation/source counts reflect the
+    // current DB rather than whatever was cached at basket-add time. Also
+    // drops entries that have been merged/removed server-side.
+    if (stored.length > 0) {
+      bulkSubstanceSummary(stored.map((s) => s.id))
+        .then((fresh) => {
+          if (fresh.length === 0) return;
+          const byId = new Map(fresh.map((f) => [f.id, f]));
+          const merged = stored
+            // Keep items the server still knows about in the order we had them;
+            // drop entries that no longer exist (e.g. deduped).
+            .filter((s) => s.id.startsWith("user:") || byId.has(s.id))
+            .map((s) => byId.get(s.id) ?? s);
+          // Only rewrite if something actually changed.
+          const changed =
+            merged.length !== stored.length ||
+            merged.some((m, i) =>
+              m.observation_count !== stored[i].observation_count ||
+              m.source_count !== stored[i].source_count ||
+              m.preferred_name !== stored[i].preferred_name,
+            );
+          if (changed) {
+            writeToStorage(merged);
+            setBasketState(merged);
+            window.dispatchEvent(new Event(CHANGE_EVENT));
+          }
+        })
+        .catch(() => {
+          /* offline / backend down — keep stored snapshot */
+        });
+    }
+
     const onChange = () => setBasketState(readFromStorage());
     window.addEventListener("storage", onChange);
     window.addEventListener(CHANGE_EVENT, onChange);

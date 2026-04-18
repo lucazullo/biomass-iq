@@ -142,23 +142,33 @@ export function DatabasesModal({ onClose }: DatabasesModalProps) {
                     </span>
                   </span>
                   <span>
-                    Records (last scrape):{" "}
+                    {db.baseline_kind === "version" ? "Ingested version:" : "Records (last scrape):"}{" "}
                     <span className="font-medium text-gray-800 tabular-nums">
-                      {db.known_record_count.toLocaleString()}
+                      {db.baseline_kind === "version"
+                        ? `v${db.known_record_count}`
+                        : db.known_record_count.toLocaleString()}
                     </span>
                   </span>
                   <span>
-                    Upstream (now):{" "}
+                    {db.baseline_kind === "version" ? "Upstream version:" : "Upstream (now):"}{" "}
                     <span className="font-medium text-gray-800 tabular-nums">
                       {db.upstream_record_count != null
-                        ? db.upstream_record_count.toLocaleString()
+                        ? db.baseline_kind === "version"
+                          ? `v${db.upstream_record_count}`
+                          : db.upstream_record_count.toLocaleString()
                         : "—"}
                     </span>
                     {db.upstream_record_count != null &&
+                      db.baseline_kind === "count" &&
                       db.upstream_record_count > db.known_record_count && (
                         <span className="ml-1 text-amber-700 font-semibold">
                           (+{(db.upstream_record_count - db.known_record_count).toLocaleString()})
                         </span>
+                      )}
+                    {db.upstream_record_count != null &&
+                      db.baseline_kind === "version" &&
+                      db.upstream_record_count !== db.known_record_count && (
+                        <span className="ml-1 text-amber-700 font-semibold">(new version)</span>
                       )}
                   </span>
                 </div>

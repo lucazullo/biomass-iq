@@ -200,8 +200,12 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-gray-100 py-6 text-center text-xs text-gray-400 space-y-1 pb-24">
-        <p>BiomassIQ — v1.1 — April 2026</p>
-        <p>Biomass characterization data sourced from PHYLIS (phyllis.nl) under TNO</p>
+        <p>BiomassIQ — v1.2 — April 2026</p>
+        <p>
+          Biomass characterization data sourced from PHYLIS (phyllis.nl, TNO) and the
+          CSIRO Database of chemical properties of Australian biomass and waste (CC BY 4.0,
+          DOI 10.25919/3yhq-8a44)
+        </p>
         <p>
           <button
             onClick={() => setShowTerms(true)}

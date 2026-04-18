@@ -131,8 +131,10 @@ function SubstanceRow({
   // These come from the augmented search results (optional on SubstanceSummary)
   const userCount = (substance as SubstanceSummary & { user_count?: number }).user_count ?? 0;
   const isUserDefined = (substance as SubstanceSummary & { is_user_defined?: boolean }).is_user_defined ?? false;
-  // observation_count from API is PHYLIS-only. User count is additive.
-  const phylisCount = isUserDefined ? 0 : substance.observation_count;
+  // observation_count from API is the total across all ingested sources
+  // (PHYLIS, CSIRO, …). User-contributed counts are tracked separately.
+  const sourceCount = (substance as SubstanceSummary & { source_count?: number }).source_count ?? 0;
+  const dbCount = isUserDefined ? 0 : substance.observation_count;
 
   return (
     <label
@@ -169,10 +171,23 @@ function SubstanceRow({
         </span>
       )}
       <span className="ml-auto flex items-center gap-1.5 shrink-0">
-        {phylisCount > 0 && (
-          <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
-            <span className="font-medium text-gray-700">{phylisCount}</span>{" "}
-            <span className="text-[10px] text-gray-400">PHYLIS</span>
+        {dbCount > 0 && (
+          <span
+            className="text-xs text-gray-500 tabular-nums whitespace-nowrap"
+            title={
+              sourceCount > 1
+                ? `${dbCount} observations pooled from ${sourceCount} sources`
+                : `${dbCount} observations from 1 source`
+            }
+          >
+            <span className="font-medium text-gray-700">{dbCount}</span>
+            {sourceCount > 1 ? (
+              <span className="ml-1 rounded bg-teal-600 text-white font-semibold px-1 py-0 text-[9px]">
+                {sourceCount}×
+              </span>
+            ) : (
+              <span className="ml-1 text-[10px] text-gray-400">obs</span>
+            )}
           </span>
         )}
         {userCount > 0 && (

@@ -188,11 +188,82 @@ def _ingest_phylis() -> None:
         print(f"[ingest] error: {e}", flush=True)
 
 
+def _ingest_csiro() -> None:
+    """Load the bundled CSIRO CC-BY-4.0 dataset into the DB. Idempotent: skips
+    if any CSIRO rows already exist."""
+    import os
+    if os.environ.get("BIOMASSIQ_SKIP_INGEST"):
+        print("[csiro] skipped via env flag", flush=True)
+        return
+    from app.models import SampleRecord
+    from app.services.source_check import CSIRO_LOCAL_VERSION
+    db = SessionLocal()
+    try:
+        count = db.query(SampleRecord).filter(SampleRecord.source_dataset == "csiro").count()
+        if count > 0:
+            print(f"[csiro] already have {count} samples — skipping", flush=True)
+            # Ensure source_status has the right baseline even on re-boots.
+            # For CSIRO the baseline is the DAP versionNumber (drift signal),
+            # NOT the sample count.
+            try:
+                from app.services.source_check import mark_ingested
+                mark_ingested(db, "csiro", CSIRO_LOCAL_VERSION)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[csiro] mark_ingested warning: {exc}", flush=True)
+            return
+    finally:
+        db.close()
+
+    try:
+        from app.adapters.csiro.parser import load_and_parse as csiro_load
+        from app.adapters.csiro.mapper import map_samples_to_db as csiro_map
+    except Exception as exc:  # noqa: BLE001
+        print(f"[csiro] adapter import error: {exc}", flush=True)
+        return
+
+    try:
+        samples = csiro_load()
+    except FileNotFoundError as exc:
+        print(f"[csiro] {exc}", flush=True)
+        return
+    except Exception as exc:  # noqa: BLE001
+        print(f"[csiro] parse error: {exc}", flush=True)
+        return
+
+    db = SessionLocal()
+    try:
+        stats = csiro_map(db, samples)
+        try:
+            from app.services.source_check import mark_ingested
+            mark_ingested(db, "csiro", CSIRO_LOCAL_VERSION)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[csiro] mark_ingested warning: {exc}", flush=True)
+        print(f"[csiro] ingest done: {stats}", flush=True)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        print(f"[csiro] ingest error: {exc}", flush=True)
+    finally:
+        db.close()
+
+
 def _background_init() -> None:
     """Full init sequence running in a background thread — doesn't block uvicorn."""
     if _wait_for_db():
         if _init_schema():
             _ingest_phylis()
+            _ingest_csiro()
+            # After ingesting all sources, merge any case-collision duplicates
+            # so multi-source substances aggregate correctly.
+            try:
+                from app.services.substance_dedupe import dedupe_case_collisions
+                db = SessionLocal()
+                try:
+                    dedupe_case_collisions(db)
+                finally:
+                    db.close()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[init] dedupe warning: {exc}", flush=True)
             # Start the periodic source-drift scheduler once the DB is ready.
             try:
                 from app.services.scheduler import start_scheduler

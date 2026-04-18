@@ -100,13 +100,16 @@ def search_substances(db: Session, query: str, limit: int = 20) -> SearchResultO
     all_additional = fuzzy_substances + like_matches
 
     def to_summary(s: CanonicalSubstance) -> SubstanceSummaryOut:
+        records = s.sample_records or []
+        n_sources = len({r.source_dataset for r in records if r.source_dataset})
         return SubstanceSummaryOut(
             id=s.id,
             preferred_name=s.preferred_name,
             scientific_name=s.scientific_name,
             type=s.type,
             taxonomy_path=s.taxonomy_path,
-            observation_count=len(s.sample_records) if s.sample_records else 0,
+            observation_count=len(records),
+            source_count=n_sources,
         )
 
     # Deduplicate: a substance should only appear in one category.

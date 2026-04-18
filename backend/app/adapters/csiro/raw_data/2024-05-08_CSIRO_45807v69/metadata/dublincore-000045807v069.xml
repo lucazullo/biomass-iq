@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dcterms:dc xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://purl.org/dc/elements/1.1/ https://dublincore.org/schemas/xmls/qdc/2008/02/11/dcterms.xsd">
+  <dc:title>Database of chemical properties of Australian biomass and waste</dc:title>
+  <dc:creator>CSIRO, Australia</dc:creator>
+  <dc:subject>Forestry biomass and bioproducts</dc:subject>
+  <dc:description>This project sought to develop a database of fuel and energy characteristics for a range of Australian biomass and wastes to support their use in a range of thermochemical technologies. The database includes biomass sourced from agriculture (wheat straw, cotton trash, sugar cane trash, chicken manure, etc), forestry (mostly woody wastes from different forestry operations including some irrigated by effluent), industrial processing (timber residues, saw dust from timber mills, bagasse from sugar industry, rice hull from rice industry, paper sludge from paper industry, etc) and urban waste (municipal solid waste, green waste and biosolids and sewage from waste water treatment facilities). The database contains relatively simple-to-use information such as proximate analysis, ultimate analysis, calorific value as well as chemical composition of mineral matter to enable project proponents to draw conclusions as to likely plant capacity and annual output. It will be updated and expanded over time as more data are available.</dc:description>
+  <dc:publisher>CSIRO</dc:publisher>
+  <dc:contributor>San Hla</dc:contributor>
+  <dc:contributor>Alex Ilyushechkin</dc:contributor>
+  <dc:contributor>Louise Ord</dc:contributor>
+  <dc:contributor>Daniel Roberts</dc:contributor>
+  <dc:type />
+  <dc:format />
+  <dc:identifier>https://doi.org/10.25919/3yhq-8a44</dc:identifier>
+  <dc:language />
+  <dcterms:temporal xsi:type="dcterms:Period">start=2000-01-01; end=2020-01-01</dcterms:temporal>
+  <dcterms:spatial xsi:type="dcterms:Box">northlimit=-10.0000; southlimit=-45.0000; westlimit=110.0000; eastLimit=155.0000; projection=WGS84</dcterms:spatial>
+  <dc:rights />
+</dcterms:dc>

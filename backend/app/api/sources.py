@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import SourceStatus
+from app.services.source_check import VERSION_BASED_SOURCES
 
 router = APIRouter()
 
@@ -23,14 +25,34 @@ class SourceStatusOut(BaseModel):
     upstream_record_count: int | None
     needs_update: bool
     last_check_error: str | None
+    # "count" — record count from last scrape; "version" — DAP version number.
+    baseline_kind: Literal["count", "version"]
 
     model_config = {"from_attributes": True}
+
+
+def _row_to_out(src: SourceStatus) -> SourceStatusOut:
+    return SourceStatusOut(
+        id=src.id,
+        display_name=src.display_name,
+        url=src.url,
+        description=src.description,
+        notes=src.notes,
+        status=src.status,
+        last_ingested_at=src.last_ingested_at,
+        last_checked_at=src.last_checked_at,
+        known_record_count=src.known_record_count,
+        upstream_record_count=src.upstream_record_count,
+        needs_update=src.needs_update,
+        last_check_error=src.last_check_error,
+        baseline_kind="version" if src.id in VERSION_BASED_SOURCES else "count",
+    )
 
 
 @router.get("", response_model=list[SourceStatusOut])
 def list_sources(db: Session = Depends(get_db)):
     rows = db.query(SourceStatus).order_by(SourceStatus.status, SourceStatus.display_name).all()
-    return rows
+    return [_row_to_out(r) for r in rows]
 
 
 @router.post("/check", response_model=list[dict])
@@ -53,4 +75,4 @@ def acknowledge(source_id: str, db: Session = Depends(get_db)):
     src.last_check_error = None
     db.commit()
     db.refresh(src)
-    return src
+    return _row_to_out(src)

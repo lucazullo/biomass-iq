@@ -85,7 +85,7 @@ export interface SampleRecord {
   measurements: Measurement[];
 }
 
-export type AnalyticalBasis = "ar" | "dry" | "daf";
+export type AnalyticalBasis = "ar" | "ad" | "dry" | "daf";
 export type Derivation = "observed" | "converted" | "imputed";
 
 export interface ObservationFilters {
@@ -142,6 +142,7 @@ export const PROPERTY_CATEGORIES = {
 
 export const BASIS_LABELS: Record<AnalyticalBasis, string> = {
   ar: "As Received",
+  ad: "Air Dried",
   dry: "Dry",
   daf: "Dry Ash-Free",
 };
