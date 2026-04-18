@@ -2,15 +2,22 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps for psycopg2
+# System deps for psycopg2 and faster installs
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python deps first (better layer caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
+# Copy app code
 COPY . .
 
-# Run schema init + ingest on startup, then serve
-CMD python scripts/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+RUN chmod +x entrypoint.sh
+
+# Railway injects PORT at runtime
+EXPOSE 8000
+
+CMD ["./entrypoint.sh"]
