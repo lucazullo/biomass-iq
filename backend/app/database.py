@@ -8,7 +8,12 @@ db_url = settings.database_url
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(db_url, pool_pre_ping=True)
+# Explicit connect_timeout prevents indefinite hangs when the DB isn't reachable
+engine = create_engine(
+    db_url,
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": 5} if db_url.startswith("postgresql") else {},
+)
 SessionLocal = sessionmaker(bind=engine)
 
 
