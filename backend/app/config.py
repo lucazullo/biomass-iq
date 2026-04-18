@@ -4,10 +4,12 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # DATABASE_URL is the standard env var used by Railway/Heroku; also accept BIOMASSIQ_DATABASE_URL
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        os.getenv("BIOMASSIQ_DATABASE_URL", "postgresql://localhost:5432/biomassiq"),
+    # DATABASE_URL is the standard env var used by Railway/Heroku; also accept BIOMASSIQ_DATABASE_URL.
+    # Use `or` so empty strings (e.g. from an unresolved variable reference) fall back.
+    database_url: str = (
+        os.getenv("DATABASE_URL")
+        or os.getenv("BIOMASSIQ_DATABASE_URL")
+        or "postgresql://localhost:5432/biomassiq"
     )
     # Comma-separated list of allowed origins via BIOMASSIQ_CORS_ORIGINS
     # Default includes localhost dev ports.
