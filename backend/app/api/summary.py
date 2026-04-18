@@ -18,6 +18,7 @@ def get_summary(
     geography: str | None = None,
     exclude_grouped_averages: bool = False,
     properties: list[str] | None = Query(None),
+    exclude_sample_ids: list[str] | None = Query(None),
     include_subtypes: bool = False,
     db: Session = Depends(get_db),
 ):
@@ -32,5 +33,6 @@ def get_summary(
         geography=geography,
         exclude_grouped_averages=exclude_grouped_averages,
         properties=properties,
+        exclude_sample_ids=exclude_sample_ids,
     )
     return compute_summary(db, substance_id, filters, include_subtypes=include_subtypes)

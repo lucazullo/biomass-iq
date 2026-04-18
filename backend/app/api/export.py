@@ -22,6 +22,7 @@ def export_observations_csv(
     year_max: int | None = None,
     exclude_grouped_averages: bool = False,
     properties: list[str] | None = Query(None),
+    exclude_sample_ids: list[str] | None = Query(None),
     db: Session = Depends(get_db),
 ):
     from app.services.observations import get_filtered_observations
@@ -35,6 +36,7 @@ def export_observations_csv(
         year_max=year_max,
         exclude_grouped_averages=exclude_grouped_averages,
         properties=properties,
+        exclude_sample_ids=exclude_sample_ids,
     )
     records = get_filtered_observations(db, substance_id, filters, page=1, page_size=10000)
     content = observations_to_csv(records)
@@ -56,6 +58,7 @@ def export_observations_json(
     year_max: int | None = None,
     exclude_grouped_averages: bool = False,
     properties: list[str] | None = Query(None),
+    exclude_sample_ids: list[str] | None = Query(None),
     db: Session = Depends(get_db),
 ):
     from app.services.observations import get_filtered_observations
@@ -68,6 +71,7 @@ def export_observations_json(
         year_max=year_max,
         exclude_grouped_averages=exclude_grouped_averages,
         properties=properties,
+        exclude_sample_ids=exclude_sample_ids,
     )
     records = get_filtered_observations(db, substance_id, filters, page=1, page_size=10000)
 

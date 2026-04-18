@@ -109,6 +109,7 @@ class ObservationFilters(BaseModel):
     geography: str | None = None
     exclude_grouped_averages: bool = False
     properties: list[str] | None = None
+    exclude_sample_ids: list[str] | None = None
 
 
 # --- Summary ---

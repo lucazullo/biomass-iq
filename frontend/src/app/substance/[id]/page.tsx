@@ -15,6 +15,12 @@ import { QuickStats } from "@/components/summary/QuickStats";
 import { ComparisonStats } from "@/components/summary/ComparisonStats";
 import { GroupEditor, type SubstanceGroup } from "@/components/summary/GroupEditor";
 import { listUserSamplesForSubstance, userSampleToSampleRecord } from "@/lib/userData";
+import { mergeSummaries } from "@/lib/mergeSummaries";
+import { SelectionBasket } from "@/components/search/SelectionBasket";
+import { useBasket } from "@/lib/basket";
+import { useExcludedSamples } from "@/lib/exclusions";
+import { UnitSystemToggle } from "@/components/ui/UnitSystemToggle";
+import { useUnitSystem, convertSummary } from "@/lib/unitConversion";
 import { ReferencesPanel } from "@/components/observations/ReferencesPanel";
 import { MyDataModal } from "@/components/ui/MyDataModal";
 
@@ -36,6 +42,9 @@ export default function SubstancePage({
 
   const router = useRouter();
 
+  const { basket, removeFromBasket, clearBasket } = useBasket();
+  const { excluded: excludedSampleIds } = useExcludedSamples();
+  const { system: unitSystem } = useUnitSystem();
   const [substances, setSubstances] = useState<SubstanceDetail[]>([]);
   const [observations, setObservations] = useState<SampleRecord[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -72,6 +81,17 @@ export default function SubstancePage({
   const [loading, setLoading] = useState(true);
   const [includeSubtypes, setIncludeSubtypes] = useState(false);
 
+  // Display-converted summaries (applied right before passing to UI components).
+  // Statistical values + unit strings swap to US when the unit toggle is set to US.
+  const displaySummary = useMemo(
+    () => (summary ? convertSummary(summary, unitSystem) : null),
+    [summary, unitSystem],
+  );
+  const displayPerSubstanceSummaries = useMemo(
+    () => perSubstanceSummaries.map((s) => convertSummary(s, unitSystem)),
+    [perSubstanceSummaries, unitSystem],
+  );
+
   // Compute grouped summaries — each group's members pooled into one summary
   const groupedSummaries = useMemo<Summary[]>(() => {
     if (groups.length === 0) return perSubstanceSummaries;
@@ -90,6 +110,11 @@ export default function SubstancePage({
       })
       .filter(Boolean) as Summary[];
   }, [groups, perSubstanceSummaries, filters]);
+
+  const displayGroupedSummaries = useMemo(
+    () => groupedSummaries.map((s) => convertSummary(s, unitSystem)),
+    [groupedSummaries, unitSystem],
+  );
 
   const removeSubstance = useCallback((idToRemove: string) => {
     const remaining = ids.filter((id) => id !== idToRemove);
@@ -120,31 +145,43 @@ export default function SubstancePage({
   useEffect(() => {
     // For PHYLIS IDs, hit the API. For user: ids, skip.
     const phylisIds = ids.filter((id) => !id.startsWith("user:"));
+    // Inject user-marked outlier exclusions into the filters sent to the API.
+    const effectiveFilters = {
+      ...filters,
+      exclude_sample_ids:
+        excludedSampleIds.length > 0
+          ? [...(filters.exclude_sample_ids || []), ...excludedSampleIds]
+          : filters.exclude_sample_ids,
+    };
+    const excludedSet = new Set(excludedSampleIds);
 
-    Promise.all(phylisIds.map((id) => getObservations(id, filters, 1, 200, includeSubtypes).catch(() => [])))
+    Promise.all(phylisIds.map((id) => getObservations(id, effectiveFilters, 1, 200, includeSubtypes).catch(() => [])))
       .then((results) => {
         // Merge in user-contributed samples for each substance (both PHYLIS-linked and user-defined)
         const userRecords = ids.flatMap((id) =>
           listUserSamplesForSubstance(id).map(userSampleToSampleRecord),
         );
-        setObservations([...results.flat(), ...userRecords]);
+        // Apply user-marked exclusions to user samples (server already filtered PHYLIS samples).
+        const filteredUserRecords = userRecords.filter((r) => !excludedSet.has(r.id));
+        setObservations([...results.flat(), ...filteredUserRecords]);
       });
 
-    Promise.all(phylisIds.map((id) => getSummary(id, filters, includeSubtypes).catch(() => null)))
+    Promise.all(phylisIds.map((id) => getSummary(id, effectiveFilters, includeSubtypes).catch(() => null)))
       .then((results) => {
         const valid = results.filter(Boolean) as Summary[];
         // Build summaries for user-defined substances from local data
         const userSummaries = ids
           .filter((id) => id.startsWith("user:"))
-          .map((id) => buildUserDefinedSummary(id, filters))
+          .map((id) => buildUserDefinedSummary(id, effectiveFilters))
           .filter(Boolean) as Summary[];
         const allSummaries = [...valid, ...userSummaries];
         setPerSubstanceSummaries(allSummaries);
         if (allSummaries.length === 0) { setSummary(null); return; }
         if (allSummaries.length === 1) { setSummary(allSummaries[0]); return; }
-        setSummary(mergeSummaries(allSummaries, filters));
+        setSummary(mergeSummaries(allSummaries, effectiveFilters));
       });
-  }, [rawId, filters, includeSubtypes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawId, filters, includeSubtypes, excludedSampleIds.join(",")]);
 
   if (loading) {
     return (
@@ -184,6 +221,9 @@ export default function SubstancePage({
           <a href="/">
             <img src="/logo.png" alt="BiomassIQ" className="h-20 w-auto" />
           </a>
+          <div className="ml-auto">
+            <UnitSystemToggle />
+          </div>
         </div>
       </header>
 
@@ -237,6 +277,25 @@ export default function SubstancePage({
           />
         )}
 
+        {/* Basis selection (filters) — moved above property coverage */}
+        <details className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" open>
+          <summary className="px-6 py-3 bg-slate-50 border-b border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-slate-100 transition">
+            Basis selection
+          </summary>
+          <div className="p-4">
+            <FilterBar filters={filters} onFiltersChange={setFilters} />
+            <label className="flex items-center gap-2 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+              <input
+                type="checkbox"
+                checked={includeSubtypes}
+                onChange={(e) => setIncludeSubtypes(e.target.checked)}
+                className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              Include subtypes in results
+            </label>
+          </div>
+        </details>
+
         {/* Property coverage — interactive filter, already collapsible */}
         <PropertyCoverageMatrix
           coverage={mergedCoverage}
@@ -244,6 +303,7 @@ export default function SubstancePage({
           onSelectedPropertiesChange={(codes) =>
             setFilters((prev) => ({ ...prev, properties: codes }))
           }
+          observations={observations}
         />
 
         {/* Merge / Compare toggle — only when multiple substances */}
@@ -306,25 +366,6 @@ export default function SubstancePage({
           </button>
         </div>
 
-        {/* Filters — collapsible */}
-        <details className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" open>
-          <summary className="px-6 py-3 bg-slate-50 border-b border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-slate-100 transition">
-            Filters
-          </summary>
-          <div className="p-4">
-            <FilterBar filters={filters} onFiltersChange={setFilters} />
-            <label className="flex items-center gap-2 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-              <input
-                type="checkbox"
-                checked={includeSubtypes}
-                onChange={(e) => setIncludeSubtypes(e.target.checked)}
-                className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-              />
-              Include subtypes in results
-            </label>
-          </div>
-        </details>
-
         {/* Group editor — only in compare mode */}
         {isMulti && compareMode === "compare" && perSubstanceSummaries.length >= 2 && (
           <GroupEditor
@@ -338,9 +379,9 @@ export default function SubstancePage({
         {viewMode === "observations" ? (
           <>
             {isMulti && compareMode === "compare" && perSubstanceSummaries.length > 0 ? (
-              <ComparisonStats summaries={groupedSummaries} />
+              <ComparisonStats summaries={displayGroupedSummaries} />
             ) : (
-              summary && <QuickStats summary={summary} />
+              displaySummary && <QuickStats summary={displaySummary} />
             )}
 
             <details className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" open>
@@ -360,23 +401,23 @@ export default function SubstancePage({
           </>
         ) : (
           <>
-            {summary && (
+            {displaySummary && (
               <details className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" open>
                 <summary className="px-6 py-3 bg-slate-50 border-b border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-slate-100 transition">
                   Detailed Statistics
                 </summary>
                 <div className="p-6">
-                  <StatisticsPanel summary={summary} />
+                  <StatisticsPanel summary={displaySummary} />
                 </div>
               </details>
             )}
-            {summary && (
+            {displaySummary && (
               <details className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" open>
                 <summary className="px-6 py-3 bg-slate-50 border-b border-gray-200 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-slate-100 transition">
                   Distribution Charts
                 </summary>
                 <div className="p-6">
-                  <DistributionCharts summary={summary} observations={observations} />
+                  <DistributionCharts summary={displaySummary} observations={observations} />
                 </div>
               </details>
             )}
@@ -412,6 +453,8 @@ export default function SubstancePage({
           />
         );
       })()}
+
+      <SelectionBasket basket={basket} onRemove={removeFromBasket} onClear={clearBasket} />
     </>
   );
 }
@@ -525,67 +568,3 @@ function buildUserDefinedSummary(id: string, filters: ObservationFilters): Summa
   };
 }
 
-function mergeSummaries(summaries: Summary[], filters: ObservationFilters): Summary {
-  const totalObs = summaries.reduce((s, sm) => s + sm.total_observations, 0);
-  const totalSrc = summaries.reduce((s, sm) => s + sm.total_sources, 0);
-  const names = summaries.map((s) => s.substance_name).join(" + ");
-
-  // Pool statistics by (property_code, basis)
-  const groups = new Map<string, PropertyStatistics[]>();
-  for (const sm of summaries) {
-    for (const stat of sm.statistics) {
-      const key = `${stat.property_code}|${stat.basis}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(stat);
-    }
-  }
-
-  const mergedStats: PropertyStatistics[] = [];
-  for (const [, stats] of groups) {
-    if (stats.length === 1) {
-      mergedStats.push(stats[0]);
-      continue;
-    }
-    // Pool statistics
-    const totalN = stats.reduce((s, st) => s + st.count, 0);
-    const pooledMean = totalN > 0
-      ? stats.reduce((s, st) => s + (st.mean ?? 0) * st.count, 0) / totalN
-      : null;
-
-    let pooledStd: number | null = null;
-    if (totalN > 1 && pooledMean != null) {
-      let num = 0;
-      for (const st of stats) {
-        if (st.count > 1 && st.std != null) num += (st.count - 1) * st.std * st.std;
-        if (st.mean != null) num += st.count * (st.mean - pooledMean) ** 2;
-      }
-      pooledStd = Math.sqrt(num / (totalN - 1));
-    }
-
-    const mins = stats.filter((s) => s.min != null).map((s) => s.min!);
-    const maxs = stats.filter((s) => s.max != null).map((s) => s.max!);
-
-    mergedStats.push({
-      ...stats[0],
-      count: totalN,
-      mean: pooledMean != null ? Math.round(pooledMean * 10000) / 10000 : null,
-      median: null, // can't pool medians
-      std: pooledStd != null ? Math.round(pooledStd * 10000) / 10000 : null,
-      min: mins.length > 0 ? Math.min(...mins) : null,
-      max: maxs.length > 0 ? Math.max(...maxs) : null,
-      q1: null,
-      q3: null,
-      source_count: stats.reduce((s, st) => s + st.source_count, 0),
-      includes_derived: stats.some((s) => s.includes_derived),
-    });
-  }
-
-  return {
-    substance_id: summaries[0].substance_id,
-    substance_name: names,
-    total_observations: totalObs,
-    total_sources: totalSrc,
-    active_filters: filters,
-    statistics: mergedStats,
-  };
-}

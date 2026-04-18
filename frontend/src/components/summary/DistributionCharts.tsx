@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import type { Summary, SampleRecord } from "@/lib/types";
 import { formatBasis } from "@/lib/formatters";
+import { useUnitSystem, convertValue } from "@/lib/unitConversion";
 
 interface DistributionChartsProps {
   summary: Summary;
@@ -24,6 +25,7 @@ const BASIS_COLORS: Record<string, string> = {
 };
 
 export function DistributionCharts({ summary, observations }: DistributionChartsProps) {
+  const { system: unitSystem } = useUnitSystem();
   const chartableStats = summary.statistics.filter((s) => s.count >= 3);
 
   if (chartableStats.length === 0) {
@@ -34,14 +36,15 @@ export function DistributionCharts({ summary, observations }: DistributionCharts
     );
   }
 
-  // Flatten all measurements by property
+  // Flatten all measurements by property, converted to the active unit system.
   const measurementsByProperty: Record<string, { value: number; basis: string; source: string }[]> = {};
   for (const record of observations) {
     for (const m of record.measurements) {
       const key = m.property_code;
       if (!measurementsByProperty[key]) measurementsByProperty[key] = [];
+      const conv = convertValue(m.original_value, m.original_unit, unitSystem);
       measurementsByProperty[key].push({
-        value: m.original_value,
+        value: conv.value,
         basis: m.original_basis,
         source: record.source_dataset,
       });

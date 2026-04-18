@@ -49,6 +49,8 @@ def compute_summary(
         sample_query = sample_query.filter(SampleRecord.geography.ilike(f"%{filters.geography}%"))
     if filters.exclude_grouped_averages:
         sample_query = sample_query.filter(SampleRecord.is_grouped_average == False)
+    if filters.exclude_sample_ids:
+        sample_query = sample_query.filter(~SampleRecord.id.in_(filters.exclude_sample_ids))
 
     sample_ids = [r[0] for r in sample_query.all()]
 

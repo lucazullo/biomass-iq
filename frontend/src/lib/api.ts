@@ -91,6 +91,27 @@ export async function compareSubstances(
   });
 }
 
+// --- Sources (v1.1 drift tracking) ---
+
+export interface SourceStatusOut {
+  id: string;
+  display_name: string;
+  url: string | null;
+  description: string | null;
+  notes: string | null;
+  status: "active" | "planned";
+  last_ingested_at: string | null;
+  last_checked_at: string | null;
+  known_record_count: number;
+  upstream_record_count: number | null;
+  needs_update: boolean;
+  last_check_error: string | null;
+}
+
+export async function listSources(): Promise<SourceStatusOut[]> {
+  return fetchApi(`/api/sources`);
+}
+
 // --- Export ---
 
 export function getExportUrl(

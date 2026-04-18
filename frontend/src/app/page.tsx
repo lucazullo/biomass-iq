@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SearchResults } from "@/components/search/SearchResults";
 import { CompareTab } from "@/components/compare/CompareTab";
@@ -8,7 +8,11 @@ import { DatabasesModal } from "@/components/ui/DatabasesModal";
 import { HelpModal } from "@/components/ui/HelpModal";
 import { MyDataModal } from "@/components/ui/MyDataModal";
 import { SelectionBasket } from "@/components/search/SelectionBasket";
-import type { SearchResult, SubstanceSummary } from "@/lib/types";
+import { DisclaimerBanner } from "@/components/ui/DisclaimerBanner";
+import { TermsModal } from "@/components/ui/TermsModal";
+import { useBasket } from "@/lib/basket";
+import { UnitSystemToggle } from "@/components/ui/UnitSystemToggle";
+import type { SearchResult } from "@/lib/types";
 
 type ActiveTab = "search" | "compare";
 
@@ -19,20 +23,11 @@ export default function Home() {
   const [showDatabases, setShowDatabases] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showMyData, setShowMyData] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Persistent basket — survives across multiple searches
-  const [basket, setBasket] = useState<SubstanceSummary[]>([]);
-
-  const addToBasket = useCallback((substance: SubstanceSummary) => {
-    setBasket((prev) => (prev.find((s) => s.id === substance.id) ? prev : [...prev, substance]));
-  }, []);
-
-  const removeFromBasket = useCallback((id: string) => {
-    setBasket((prev) => prev.filter((s) => s.id !== id));
-  }, []);
-
-  const clearBasket = useCallback(() => setBasket([]), []);
+  // Persistent basket — backed by localStorage so it survives navigation, tab switches, and reloads.
+  const { basket, addToBasket, removeFromBasket, clearBasket } = useBasket();
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
@@ -56,9 +51,28 @@ export default function Home() {
 
   return (
     <>
+      <DisclaimerBanner />
       {/* Hero header */}
       <header className="bg-gradient-to-b from-slate-50 to-slate-100 border-b border-slate-200 px-6 py-4 text-center relative">
         <div className="absolute top-4 right-4 flex items-center gap-2">
+          <UnitSystemToggle />
+          {basket.length > 0 && (
+            <button
+              onClick={() => {
+                const ok = window.confirm(
+                  `Empty your comparison basket?\n\nThis will remove all ${basket.length} selected material${basket.length === 1 ? "" : "s"}. The action cannot be undone.`,
+                );
+                if (ok) clearBasket();
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+              title="Empty the selection basket"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
+              Empty basket ({basket.length})
+            </button>
+          )}
           <button
             onClick={() => setShowMyData(true)}
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
@@ -124,6 +138,7 @@ export default function Home() {
       {showDatabases && <DatabasesModal onClose={() => setShowDatabases(false)} />}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       {showMyData && <MyDataModal onClose={() => setShowMyData(false)} />}
+      {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
 
       <main className="mx-auto w-full max-w-4xl flex-1 space-y-4 px-4 py-8">
         {activeTab === "search" && (
@@ -174,12 +189,27 @@ export default function Home() {
           </>
         )}
 
-        {activeTab === "compare" && <CompareTab />}
+        {activeTab === "compare" && (
+          <CompareTab
+            basket={basket}
+            onRemoveFromBasket={removeFromBasket}
+            onClearBasket={clearBasket}
+            onGoToSearch={() => setActiveTab("search")}
+          />
+        )}
       </main>
 
       <footer className="border-t border-gray-100 py-6 text-center text-xs text-gray-400 space-y-1 pb-24">
-        <p>BiomassIQ — v1.0 — April 2026</p>
+        <p>BiomassIQ — v1.1 — April 2026</p>
         <p>Biomass characterization data sourced from PHYLIS (phyllis.nl) under TNO</p>
+        <p>
+          <button
+            onClick={() => setShowTerms(true)}
+            className="text-teal-600 hover:text-teal-700 underline"
+          >
+            Terms of Use
+          </button>
+        </p>
         <p>
           Questions, suggestions, bug reports, or feature requests?{" "}
           <a

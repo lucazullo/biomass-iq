@@ -4,6 +4,11 @@ import React, { useState, useMemo } from "react";
 import type { Summary, PropertyStatistics } from "@/lib/types";
 import { formatBasis, formatValue } from "@/lib/formatters";
 import { ComparisonRangeChart } from "./ComparisonRangeChart";
+import {
+  applyAggregations,
+  statKey as aggStatKey,
+  type PropertyAggregation,
+} from "@/lib/propertyAggregation";
 
 interface ComparisonStatsProps {
   summaries: Summary[];
@@ -62,11 +67,24 @@ export function ComparisonStats({ summaries }: ComparisonStatsProps) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showChart, setShowChart] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [aggregations, setAggregations] = useState<PropertyAggregation[]>([]);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [aggregateName, setAggregateName] = useState("");
+
+  // Apply aggregations to each substance/group's statistics before building rows.
+  const summariesWithAggs = useMemo<Summary[]>(
+    () =>
+      summaries.map((s) => ({
+        ...s,
+        statistics: applyAggregations(s.statistics, aggregations),
+      })),
+    [summaries, aggregations],
+  );
 
   // Collect all unique (property_code, basis) combinations across all substances
   const rows = useMemo(() => {
     const keyMap = new Map<string, ComparisonRow>();
-    for (const summary of summaries) {
+    for (const summary of summariesWithAggs) {
       for (const stat of summary.statistics) {
         const key = `${stat.property_code}|${stat.basis}`;
         if (!keyMap.has(key)) {
@@ -82,7 +100,37 @@ export function ComparisonStats({ summaries }: ComparisonStatsProps) {
       }
     }
     return [...keyMap.values()];
-  }, [summaries]);
+  }, [summariesWithAggs]);
+
+  // --- Aggregation helpers ---
+
+  const isAggregatedKey = (key: string) => key.startsWith("agg_");
+  // When user picks rows to aggregate, we only allow non-synthetic rows.
+  const selectableNonAggregated = [...selectedKeys].filter((k) => !isAggregatedKey(k.split("|")[0]));
+  const canAggregate = selectableNonAggregated.length >= 2;
+
+  const handleAggregate = () => {
+    if (!aggregateName.trim() || selectableNonAggregated.length < 2) return;
+    const agg: PropertyAggregation = {
+      id: Date.now().toString(),
+      name: aggregateName.trim(),
+      sourceKeys: selectableNonAggregated,
+    };
+    setAggregations((prev) => [...prev, agg]);
+    setSelectedKeys(new Set());
+    setAggregateName("");
+    setShowNamePrompt(false);
+  };
+
+  const handleDisaggregate = (aggId: string) => {
+    setAggregations((prev) => prev.filter((a) => a.id !== aggId));
+  };
+
+  // Map each synthetic row back to its aggregation id, for the ↺ button in the table.
+  const aggregationByRowCode = new Map<string, string>();
+  for (const a of aggregations) aggregationByRowCode.set(`agg_${a.id}`, a.id);
+  // Silence unused-warning for the imported alias since statKey is used indirectly via sourceKeys.
+  void aggStatKey;
 
   // Sort
   const sorted = useMemo(() => {
@@ -155,10 +203,59 @@ export function ComparisonStats({ summaries }: ComparisonStatsProps) {
       </div>
 
       {/* Toolbar */}
-      <div className="px-6 py-2 flex items-center justify-between border-b border-gray-100">
-        <div className="flex items-center gap-3">
+      <div className="px-6 py-2 flex items-center justify-between border-b border-gray-100 gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           {selectedKeys.size > 0 && (
             <span className="text-xs text-gray-500">{selectedKeys.size} selected</span>
+          )}
+          {canAggregate && !showNamePrompt && (
+            <button
+              onClick={() => setShowNamePrompt(true)}
+              className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-100 transition"
+              title="Pool the selected rows into one synthetic combined property"
+            >
+              Aggregate {selectableNonAggregated.length} into one property
+            </button>
+          )}
+          {showNamePrompt && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAggregate();
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                autoFocus
+                type="text"
+                value={aggregateName}
+                onChange={(e) => setAggregateName(e.target.value)}
+                placeholder="Name for combined property (e.g. Ash)"
+                className="text-xs rounded border border-teal-400 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-300 w-60"
+              />
+              <button
+                type="submit"
+                disabled={!aggregateName.trim()}
+                className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-700 transition disabled:opacity-50"
+              >
+                Combine
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNamePrompt(false);
+                  setAggregateName("");
+                }}
+                className="text-xs text-gray-400 hover:text-gray-600 transition"
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+          {aggregations.length > 0 && (
+            <span className="text-[11px] text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2 py-0.5">
+              {aggregations.length} aggregated {aggregations.length === 1 ? "property" : "properties"}
+            </span>
           )}
         </div>
         <div className="flex gap-2">
@@ -241,18 +338,45 @@ export function ComparisonStats({ summaries }: ComparisonStatsProps) {
             {sorted.map((row) => {
               const key = rowKey(row);
               const isSelected = selectedKeys.has(key);
+              const aggId = aggregationByRowCode.get(row.property_code);
+              const isAggregated = !!aggId;
               return (
-                <tr key={key} className={`${isSelected ? "bg-sky-50/50" : "hover:bg-gray-50"} transition`}>
+                <tr
+                  key={key}
+                  className={`${
+                    isSelected
+                      ? "bg-sky-50/50"
+                      : isAggregated
+                      ? "bg-teal-50/40 hover:bg-teal-50/60"
+                      : "hover:bg-gray-50"
+                  } transition`}
+                >
                   <td className="px-2 py-2 text-center">
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelect(key)}
                       className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                      title={
+                        isAggregated
+                          ? "Select to include this combined property in the graph"
+                          : "Select for graph or to aggregate with other properties"
+                      }
                     />
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-inherit">
-                    {row.display_name}
+                    <span className="inline-flex items-center gap-1.5">
+                      {row.display_name}
+                      {isAggregated && (
+                        <button
+                          onClick={() => handleDisaggregate(aggId!)}
+                          className="text-[11px] text-teal-600 hover:text-red-600 transition"
+                          title="Disaggregate — restore original properties"
+                        >
+                          ↺
+                        </button>
+                      )}
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{row.unit}</td>
                   <td className="px-3 py-2">

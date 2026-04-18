@@ -22,13 +22,16 @@ interface ComparisonRangeChartProps {
 const SUBSTANCE_ROW_HEIGHT = 22;
 const PROPERTY_GAP = 12;
 const LABEL_WIDTH = 200;
-const RIGHT_MARGIN = 55;
+const RIGHT_MARGIN = 20;
 const LEFT_VAL_MARGIN = 30;
 const TOP_PADDING = 35;
 const BOTTOM_PADDING = 20;
 
 function exportChartAsPng(containerEl: HTMLElement, filename: string) {
-  const svgs = containerEl.querySelectorAll("svg");
+  const allSvgs = Array.from(containerEl.querySelectorAll("svg"));
+  const svgs = allSvgs.filter(
+    (svg) => !svg.closest(".print\\:hidden") && !svg.closest("button"),
+  );
   if (svgs.length === 0) return;
   const scale = 2;
   const padding = 20;
@@ -141,19 +144,41 @@ export function ComparisonRangeChart({ summaries, rows, title }: ComparisonRange
       ))}
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-gray-700 font-medium pt-2 border-t border-gray-200">
-        {summaries.map((s, i) => (
-          <span key={s.substance_id} className="flex items-center gap-1.5">
-            <span
-              className="w-3 h-3 rounded-sm border"
-              style={{
-                backgroundColor: SUBSTANCE_COLORS[i % SUBSTANCE_COLORS.length].fill,
-                borderColor: SUBSTANCE_COLORS[i % SUBSTANCE_COLORS.length].stroke,
-              }}
-            />
-            <span className="truncate max-w-[140px]">{s.substance_name}</span>
+      <div className="pt-2 border-t border-gray-200 space-y-2">
+        {/* Group color legend */}
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-gray-700 font-medium">
+          {summaries.map((s, i) => (
+            <span key={s.substance_id} className="flex items-center gap-1.5">
+              <span
+                className="w-3 h-3 rounded-sm border"
+                style={{
+                  backgroundColor: SUBSTANCE_COLORS[i % SUBSTANCE_COLORS.length].fill,
+                  borderColor: SUBSTANCE_COLORS[i % SUBSTANCE_COLORS.length].stroke,
+                }}
+              />
+              <span className="truncate max-w-[140px]">{s.substance_name}</span>
+            </span>
+          ))}
+        </div>
+        {/* Shade & marker legend */}
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-[11px] text-gray-600">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm border border-gray-500" style={{ backgroundColor: "#94a3b8", opacity: 0.25 }} />
+            <span className="w-3 h-3 rounded-sm border border-gray-500" style={{ backgroundColor: "#94a3b8", opacity: 0.7 }} />
+            <span>±2 / ±1 SD (lighter / darker shade of the group&rsquo;s color)</span>
           </span>
-        ))}
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-gray-700" />
+            Mean
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-0 border-t border-gray-400 border-dashed" />
+            Min / Max
+          </span>
+          <span className="text-gray-400 italic">
+            Groups with n=1 show only the mean marker.
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -212,11 +237,21 @@ function UnitGroup({ unit, rows, summaries }: { unit: string; rows: ComparisonRo
 
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-700 mb-1">Unit: {unit}</p>
       <svg
         viewBox={`0 0 ${viewWidth} ${svgHeight}`}
         className="w-full"
       >
+        {/* Unit label — above the property-name column, right-aligned with property labels */}
+        <text
+          x={LABEL_WIDTH - 8}
+          y={TOP_PADDING - 10}
+          textAnchor="end"
+          fontSize={11}
+          fill="#1f2937"
+          fontWeight={700}
+        >
+          [{unit}]
+        </text>
         {/* Axis ticks and grid */}
         {ticks.map((tick) => {
           const x = toX(tick);

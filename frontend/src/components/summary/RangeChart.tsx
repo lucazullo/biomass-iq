@@ -3,6 +3,8 @@
 import { useMemo, useRef, useCallback } from "react";
 import type { PropertyStatistics, AnalyticalBasis } from "@/lib/types";
 import { formatBasis } from "@/lib/formatters";
+import { usePropertyColors } from "@/lib/chartColors";
+import { ChartColorPicker } from "@/components/ui/ChartColorPicker";
 
 interface RangeChartProps {
   statistics: PropertyStatistics[];
@@ -10,20 +12,21 @@ interface RangeChartProps {
 }
 
 function exportChartAsPng(containerEl: HTMLElement, filename: string) {
-  // Collect all SVGs in the container
-  const svgs = containerEl.querySelectorAll("svg");
+  // Collect SVGs — but skip anything marked as UI chrome (.print:hidden) and
+  // skip tiny icon SVGs inside buttons (Colors, Export PNG, etc.).
+  const allSvgs = Array.from(containerEl.querySelectorAll("svg"));
+  const svgs = allSvgs.filter((svg) => {
+    if (svg.closest(".print\\:hidden")) return false;
+    if (svg.closest("button")) return false;
+    return true;
+  });
   if (svgs.length === 0) return;
 
-  // Create a single canvas combining all SVG sections
   const scale = 2; // retina quality
   const padding = 20;
 
-  // Measure total height needed
   let totalHeight = padding;
   const sections: { svg: SVGSVGElement; y: number; width: number; height: number }[] = [];
-
-  // Also capture text labels (titles, unit headers)
-  const textEls = containerEl.querySelectorAll("h4, p.text-xs");
 
   for (const svg of svgs) {
     const rect = svg.getBoundingClientRect();
@@ -48,47 +51,75 @@ function exportChartAsPng(containerEl: HTMLElement, filename: string) {
   const total = sections.length;
 
   const finalize = () => {
-    // Draw legend at bottom
+    // Legend — neutral grey swatches, same messaging as on-screen legend.
+    // Since colors vary per property, we describe the convention ("lighter /
+    // darker shade of the property's color") rather than picking a specific hue.
     const ly = totalHeight - 35;
     ctx.font = "11px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    const cx = maxWidth / 2 + padding;
-
-    // ±2 SD
-    ctx.fillStyle = "#ccfbf1";
-    ctx.fillRect(cx - 160, ly, 14, 14);
-    ctx.strokeStyle = "#99f6e4";
-    ctx.strokeRect(cx - 160, ly, 14, 14);
-    ctx.fillStyle = "#6b7280";
     ctx.textAlign = "left";
-    ctx.fillText("±2 SD", cx - 142, ly + 11);
+    ctx.textBaseline = "alphabetic";
 
-    // ±1 SD
-    ctx.fillStyle = "#5eead4";
-    ctx.fillRect(cx - 80, ly, 14, 14);
-    ctx.strokeStyle = "#14b8a6";
-    ctx.strokeRect(cx - 80, ly, 14, 14);
-    ctx.fillStyle = "#6b7280";
-    ctx.fillText("±1 SD", cx - 62, ly + 11);
+    const grey = "#94a3b8";
+    const greyBorder = "#6b7280";
+    const textColor = "#374151";
 
-    // Mean
+    // Measure widths to center the legend as a whole.
+    const shadesLabel = "±2 / ±1 SD (lighter / darker shade of the property's color)";
+    const meanLabel = "Mean";
+    const mmLabel = "Min / Max";
+
+    const swatchW = 14;
+    const gap = 6;
+    const itemGap = 18;
+    const shadesWidth = swatchW * 2 + gap + 6 + ctx.measureText(shadesLabel).width;
+    const meanWidth = 10 + 6 + ctx.measureText(meanLabel).width;
+    const mmWidth = 22 + 6 + ctx.measureText(mmLabel).width;
+    const totalLegendWidth = shadesWidth + itemGap + meanWidth + itemGap + mmWidth;
+
+    let lx = (maxWidth + padding * 2) / 2 - totalLegendWidth / 2;
+
+    // Two-shade swatches
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = grey;
+    ctx.fillRect(lx, ly, swatchW, swatchW);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = greyBorder;
+    ctx.strokeRect(lx, ly, swatchW, swatchW);
+    lx += swatchW + gap;
+
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = grey;
+    ctx.fillRect(lx, ly, swatchW, swatchW);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = greyBorder;
+    ctx.strokeRect(lx, ly, swatchW, swatchW);
+    lx += swatchW + 6;
+
+    ctx.fillStyle = textColor;
+    ctx.fillText(shadesLabel, lx, ly + 11);
+    lx += ctx.measureText(shadesLabel).width + itemGap;
+
+    // Mean dot
     ctx.beginPath();
-    ctx.arc(cx + 7, ly + 7, 4, 0, Math.PI * 2);
+    ctx.arc(lx + 5, ly + 7, 4, 0, Math.PI * 2);
     ctx.fillStyle = "#1f2937";
     ctx.fill();
-    ctx.fillStyle = "#6b7280";
-    ctx.fillText("Mean", cx + 16, ly + 11);
+    lx += 10 + 6;
+    ctx.fillStyle = textColor;
+    ctx.fillText(meanLabel, lx, ly + 11);
+    lx += ctx.measureText(meanLabel).width + itemGap;
 
-    // Min/Max
+    // Min/Max dashed line
     ctx.setLineDash([3, 2]);
     ctx.strokeStyle = "#9ca3af";
     ctx.beginPath();
-    ctx.moveTo(cx + 65, ly + 7);
-    ctx.lineTo(cx + 85, ly + 7);
+    ctx.moveTo(lx, ly + 7);
+    ctx.lineTo(lx + 20, ly + 7);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#6b7280";
-    ctx.fillText("Min / Max", cx + 90, ly + 11);
+    lx += 22 + 6;
+    ctx.fillStyle = textColor;
+    ctx.fillText(mmLabel, lx, ly + 11);
 
     // Download
     const link = document.createElement("a");
@@ -122,18 +153,11 @@ function exportChartAsPng(containerEl: HTMLElement, filename: string) {
   }
 }
 
-const BASIS_COLORS: Record<string, { fill: string; stroke: string }> = {
-  ar: { fill: "#fbbf24", stroke: "#d97706" },
-  dry: { fill: "#5eead4", stroke: "#0d9488" },
-  daf: { fill: "#a5b4fc", stroke: "#6366f1" },
-  ash: { fill: "#fca5a5", stroke: "#dc2626" },
-};
-
 const DEFAULT_COLOR = { fill: "#94a3b8", stroke: "#64748b" };
 
 const ROW_HEIGHT = 42;
 const LABEL_WIDTH = 180;
-const RIGHT_MARGIN = 55;
+const RIGHT_MARGIN = 20;
 const LEFT_VAL_MARGIN = 30; // space for min value label
 const TOP_PADDING = 30;
 const BOTTOM_PADDING = 20;
@@ -170,6 +194,18 @@ export function RangeChart({ statistics, title }: RangeChartProps) {
       });
   }, [statistics]);
 
+  // Unique properties present in the current chart (drives which rows the color picker shows).
+  const chartProperties = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { property_code: string; display_name: string }[] = [];
+    for (const d of chartData) {
+      if (seen.has(d.property_code)) continue;
+      seen.add(d.property_code);
+      out.push({ property_code: d.property_code, display_name: d.display_name });
+    }
+    return out;
+  }, [chartData]);
+
   // Group by unit so properties with different units get separate scales
   const byUnit = useMemo(() => {
     const groups: Record<string, typeof chartData> = {};
@@ -193,29 +229,29 @@ export function RangeChart({ statistics, title }: RangeChartProps) {
     <div ref={containerRef} className="space-y-6 bg-white">
       <div className="flex items-center justify-between">
         {title && <h4 className="text-sm font-semibold text-gray-700">{title}</h4>}
-        <button
-          onClick={handleExport}
-          className="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 print:hidden"
-          title="Export chart as PNG"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-          </svg>
-          Export PNG
-        </button>
+        <div className="ml-auto flex items-center gap-2 print:hidden">
+          <ChartColorPicker properties={chartProperties} />
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+            title="Export chart as PNG"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            Export PNG
+          </button>
+        </div>
       </div>
       {Object.entries(byUnit).map(([unit, data]) => (
         <UnitGroup key={unit} unit={unit} data={data} />
       ))}
       {/* Legend */}
-      <div className="flex items-center justify-center gap-6 text-xs text-gray-700 font-medium pt-2 border-t border-gray-200">
+      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-gray-700 font-medium pt-2 border-t border-gray-200">
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm bg-teal-200 border border-teal-400" />
-          ±2 SD
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm bg-teal-400 border border-teal-600" />
-          ±1 SD
+          <span className="w-3 h-3 rounded-sm border border-gray-400" style={{ backgroundColor: "#94a3b8", opacity: 0.3 }} />
+          <span className="w-3 h-3 rounded-sm border border-gray-500" style={{ backgroundColor: "#94a3b8", opacity: 0.7 }} />
+          <span>±2 / ±1 SD (lighter / darker shade of the property&rsquo;s color)</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-gray-700" />
@@ -248,6 +284,7 @@ interface ChartRow {
 }
 
 function UnitGroup({ unit, data }: { unit: string; data: ChartRow[] }) {
+  const { getColor } = usePropertyColors();
   // Compute shared scale across all properties in this unit group
   const allValues = data.flatMap((d) => [d.min, d.max, d.lo2, d.hi2]);
   const scaleMin = Math.min(...allValues);
@@ -284,12 +321,22 @@ function UnitGroup({ unit, data }: { unit: string; data: ChartRow[] }) {
 
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-700 mb-1">Unit: {unit}</p>
       <svg
         viewBox={`0 0 ${viewWidth} ${svgHeight}`}
         className="w-full"
         style={{ maxHeight: Math.max(svgHeight, 100) }}
       >
+        {/* Unit label — above the property-name column, right-aligned with property labels */}
+        <text
+          x={LABEL_WIDTH - 8}
+          y={TOP_PADDING - 10}
+          textAnchor="end"
+          fontSize={11}
+          fill="#1f2937"
+          fontWeight={700}
+        >
+          [{unit}]
+        </text>
         {/* Axis ticks and grid */}
         {ticks.map((tick) => {
           const x = toX(tick, viewWidth);
@@ -313,7 +360,7 @@ function UnitGroup({ unit, data }: { unit: string; data: ChartRow[] }) {
         {/* Data rows */}
         {data.map((d, i) => {
           const y = TOP_PADDING + i * ROW_HEIGHT + ROW_HEIGHT / 2;
-          const colors = BASIS_COLORS[d.basis] || DEFAULT_COLOR;
+          const colors = getColor(d.property_code) || DEFAULT_COLOR;
 
           const xMin = toX(d.min, viewWidth);
           const xMax = toX(d.max, viewWidth);

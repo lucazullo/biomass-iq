@@ -40,6 +40,8 @@ def get_filtered_observations(
         query = query.filter(SampleRecord.geography.ilike(f"%{filters.geography}%"))
     if filters.exclude_grouped_averages:
         query = query.filter(SampleRecord.is_grouped_average == False)
+    if filters.exclude_sample_ids:
+        query = query.filter(~SampleRecord.id.in_(filters.exclude_sample_ids))
 
     # Paginate
     offset = (page - 1) * page_size

@@ -18,6 +18,7 @@ def get_observations(
     geography: str | None = None,
     exclude_grouped_averages: bool = False,
     properties: list[str] | None = Query(None),
+    exclude_sample_ids: list[str] | None = Query(None),
     include_subtypes: bool = False,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -34,6 +35,7 @@ def get_observations(
         geography=geography,
         exclude_grouped_averages=exclude_grouped_averages,
         properties=properties,
+        exclude_sample_ids=exclude_sample_ids,
     )
     return get_filtered_observations(
         db, substance_id, filters,

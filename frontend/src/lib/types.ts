@@ -97,6 +97,7 @@ export interface ObservationFilters {
   geography?: string;
   exclude_grouped_averages?: boolean;
   properties?: string[];
+  exclude_sample_ids?: string[];
 }
 
 // --- Summary ---
