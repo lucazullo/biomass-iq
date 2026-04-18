@@ -13,8 +13,14 @@ echo "=== BiomassIQ backend startup ==="
 echo "HTTP port: $PORT"
 echo "DATABASE_URL present: $([ -n "$DATABASE_URL" ] && echo yes || echo no)"
 
-# Run DB init (schema + ingest). Non-fatal on error.
-python scripts/init_db.py || echo "init_db.py reported errors but continuing"
+# Schema init is fast — run it synchronously so the API has tables ready
+python scripts/init_schema.py || echo "init_schema.py reported errors but continuing"
+
+# Ingestion is slow (~2-3 min for 75K measurements) — run it in the background
+# so uvicorn can start accepting traffic and Railway's healthcheck passes.
+python scripts/ingest_phylis.py &
+INGEST_PID=$!
+echo "PHYLIS ingestion started in background (pid=$INGEST_PID)"
 
 # Start the web server
 exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
