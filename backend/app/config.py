@@ -1,28 +1,27 @@
 import os
 
-from pydantic_settings import BaseSettings
+
+def _parse_cors(value: str | None) -> list[str]:
+    if not value:
+        return ["http://localhost:3000", "http://localhost:3002"]
+    value = value.strip()
+    if value == "*":
+        return ["*"]
+    return [o.strip() for o in value.split(",") if o.strip()]
 
 
-class Settings(BaseSettings):
-    # DATABASE_URL is the standard env var used by Railway/Heroku; also accept BIOMASSIQ_DATABASE_URL.
-    # Use `or` so empty strings (e.g. from an unresolved variable reference) fall back.
-    database_url: str = (
-        os.getenv("DATABASE_URL")
-        or os.getenv("BIOMASSIQ_DATABASE_URL")
-        or "postgresql://localhost:5432/biomassiq"
-    )
-    # Comma-separated list of allowed origins via BIOMASSIQ_CORS_ORIGINS
-    # Default includes localhost dev ports.
-    cors_origins: list[str] = [
-        o.strip()
-        for o in os.getenv(
-            "BIOMASSIQ_CORS_ORIGINS",
-            "http://localhost:3000,http://localhost:3002",
-        ).split(",")
-        if o.strip()
-    ]
+class Settings:
+    """Minimal settings object — Pydantic Settings' automatic env parsing
+    interferes with list-type fields, so we do it manually."""
 
-    model_config = {"env_prefix": "BIOMASSIQ_"}
+    def __init__(self) -> None:
+        # DATABASE_URL is the standard env var used by Render/Railway/Heroku
+        self.database_url: str = (
+            os.getenv("DATABASE_URL")
+            or os.getenv("BIOMASSIQ_DATABASE_URL")
+            or "postgresql://localhost:5432/biomassiq"
+        )
+        self.cors_origins: list[str] = _parse_cors(os.getenv("BIOMASSIQ_CORS_ORIGINS"))
 
 
 settings = Settings()
