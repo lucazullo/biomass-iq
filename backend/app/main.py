@@ -54,7 +54,18 @@ def status():
     return init_status
 
 
+def _redact_url(url: str) -> str:
+    """Strip credentials from a DB URL for safe logging."""
+    import re
+    return re.sub(r"://[^@]*@", "://***:***@", url)
+
+
 def _wait_for_db(max_attempts: int = 30, delay: float = 2.0) -> bool:
+    import os
+    # Log the (redacted) target on first attempt so we can see WHERE it's trying to connect
+    db_url = os.environ.get("DATABASE_URL", "")
+    print(f"[init] DB target: {_redact_url(db_url)}", flush=True)
+
     for attempt in range(1, max_attempts + 1):
         try:
             with engine.connect() as conn:
@@ -63,7 +74,8 @@ def _wait_for_db(max_attempts: int = 30, delay: float = 2.0) -> bool:
             print(f"[init] DB connected (attempt {attempt})", flush=True)
             return True
         except OperationalError as e:
-            print(f"[init] [{attempt}/{max_attempts}] DB not ready: {type(e).__name__}", flush=True)
+            msg = str(e)[:200]
+            print(f"[init] [{attempt}/{max_attempts}] DB not ready: {type(e).__name__}: {msg}", flush=True)
             time.sleep(delay)
         except Exception as e:
             print(f"[init] unexpected DB error: {type(e).__name__}: {e}", flush=True)

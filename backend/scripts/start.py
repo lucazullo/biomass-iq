@@ -13,16 +13,16 @@ import sys
 
 
 def resolve_port() -> int:
+    """Listen on whatever PORT Railway sets. Each Railway service runs in its own
+    container, so even if PORT=5432 (Postgres's port) is injected into this service's
+    env by an addon, there's no real conflict — we still bind 0.0.0.0:$PORT so
+    Railway's proxy finds us."""
     raw = os.environ.get("PORT", "8080")
     try:
-        port = int(raw)
+        return int(raw)
     except ValueError:
         print(f"PORT={raw!r} is not an integer — defaulting to 8080", flush=True)
         return 8080
-    if port in (5432, 3306):
-        print(f"PORT={port} looks like a DB port — overriding to 8080", flush=True)
-        return 8080
-    return port
 
 
 def main() -> None:
