@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError
 from app.config import settings
 from app.api import search, observations, summary, compare, export
 from app.database import engine, Base, SessionLocal
+from app import models  # noqa: F401 — registers all SQLAlchemy models with Base.metadata
 
 app = FastAPI(
     title="BiomassIQ API",
@@ -54,7 +55,6 @@ def status():
 
 
 def _wait_for_db(max_attempts: int = 30, delay: float = 2.0) -> bool:
-    from app.models import *  # noqa: F401, F403 — register models
     for attempt in range(1, max_attempts + 1):
         try:
             with engine.connect() as conn:
